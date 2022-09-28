@@ -24,13 +24,23 @@ int check_heap() {
     // Example heap check:
     // Check that all blocks in the free list are marked free.
     // If a block is marked allocated, return -1.
-    /*
-        memory_block_t *cur = free_head;
-        while (cur) {
-            if (is_allocated(cur)) {
-                return -1;
+    memory_block_t *cur = free_head;
+    while (cur) {
+        if (is_allocated(cur)) {
+            return -1;
+        }
+        size_t pos = (size_t) cur;
+        if (pos % ALIGNMENT != 0) {
+            return -2;
+        }
+        if (cur->next) {
+            size_t nextPos = (size_t) cur->next;
+            size_t size = get_size(cur);
+            if (pos + size + sizeof(memory_block_t) > nextPos) {
+                return -3;
             }
         }
-    */
+        cur = cur->next;
+    }
     return 0;
 }
