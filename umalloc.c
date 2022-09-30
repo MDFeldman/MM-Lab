@@ -236,8 +236,8 @@ memory_block_t *split(memory_block_t *block, size_t size) {
     }
     memory_block_t * free = ((void*) block) + min_padded_size;
 
-    printf("SPLITTING ALLOCATION OUT CONTAINED -------- %p\n", block);
-    printf("SPLITTING FOR NEW FREE BLOCK AT ----------- %p\n", free);
+//    printf("SPLITTING ALLOCATION OUT CONTAINED -------- %p\n", block);
+//    printf("SPLITTING FOR NEW FREE BLOCK AT ----------- %p\n", free);
 
     put_block(free, free_block_alloc, false);
     free->next = block->next;
@@ -261,7 +261,6 @@ memory_block_t *split(memory_block_t *block, size_t size) {
     block->next = free;
     allocate(block);
     set_size(block, size);
-    printf("AHHH IM GONNA SPLIT RETURN 2\n");
     return free;
 }
 
@@ -287,9 +286,6 @@ int uinit() {
     put_block(free_head, payload_size, false);
     set_no_preceeding(free_head);
     set_no_proceeding(free_head);
-    printf("REQ %016lX\n", request);
-    printf("PTR %p\n", free_head);
-    printf("SIZE %016lX\n", get_size(free_head));
     return 0;
 }
 
@@ -299,8 +295,6 @@ int uinit() {
 void *umalloc(size_t size) {
     //* STUDENT TODO
     memory_block_t * block = find(size);
-    printf("BLOCK ALLOCATING AT -------- %p\n", block);
-    printf("ALLOCATION AMOUNT ---------- %016lX\n", get_size(block));
     if (block) {
         return get_payload(block);
     }
@@ -320,16 +314,12 @@ void ufree(void *ptr) {
     //* STUDENT TODO
 
     memory_block_t * new_free = get_block(ptr);
-    printf("FREEDOM AT ----------------------------- %p\n", new_free);
-    printf("FREED SIZE %016lX\n", get_size(new_free));
-
 
     assert(is_allocated(new_free));
     deallocate(new_free);
     memory_block_t *cur = free_head;
 
     if (!cur) {
-        printf("CASE -1\n");
         free_head = new_free;
         free_head->prev = NULL;
         free_head->next = NULL;
@@ -337,7 +327,6 @@ void ufree(void *ptr) {
     }
 
     if (cur > new_free) {
-        printf("CASE 0\n");
         free_head = new_free;
         cur->prev = new_free;
         free_head->next = cur;
@@ -347,7 +336,6 @@ void ufree(void *ptr) {
     while (cur < new_free && cur->next) cur = cur->next;
 
     if (cur >= new_free) {
-        printf("CASE 1\n");
         assert(cur != new_free);
         new_free->next = cur;
         new_free->prev = cur->prev;
@@ -357,7 +345,6 @@ void ufree(void *ptr) {
         cur->prev = new_free;
     }
     else { // !cur->next
-        printf("CASE 2\n");
         cur->next = new_free;
         new_free->prev = cur;
     }

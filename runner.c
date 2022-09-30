@@ -102,15 +102,12 @@ size_t max_bytes_in_use;
  */
 static int run_trace_line(trace_t *trace, size_t curr_op, int utilization, int run_check_heap) {
 
-    printf("TRACING -----------\n");
-
     if (curr_op % 5 == 0) {
         void *ret = sbrk(4096);
         mprotect(ret, 4096, PROT_NONE);
     }
     traceop_t op = trace->ops[curr_op];
     if (op.type == ALLOC) {
-        printf("OP ALLOC\n");
         trace->blocks[op.index].is_allocated = true;
         trace->blocks[op.index].content_val = curr_op;
         trace->blocks[op.index].block_size = op.size;
@@ -138,7 +135,6 @@ static int run_trace_line(trace_t *trace, size_t curr_op, int utilization, int r
 
         copy_id((size_t*) trace->blocks[op.index].payload, trace->blocks[op.index].block_size, curr_op);
     } else {
-        printf("OP NOT ALLOC\n");
         trace->blocks[op.index].is_allocated = false;
 
         if (verbose) {
