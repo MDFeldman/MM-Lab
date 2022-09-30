@@ -68,6 +68,11 @@ void set_no_proceeding(memory_block_t *block) {
     block->block_size_alloc &= ~0x4;
 }
 
+void set_size(memory_block_t *block, size_t size) {
+    assert(block != NULL);
+    block->block_size_alloc &= ALIGNMENT-1;
+    block->block_size_alloc = (size & ~(ALIGNMENT-1)) | block->block_size_alloc;
+}
 
 /*
  * get_size - gets the size of the block.
@@ -156,10 +161,14 @@ memory_block_t *find(size_t size) {
                 }
                 allocate(cur);
             }
+            if (cur == free_head) {
+                free_head = cur->next;
+            }
             return cur;
         }
         cur = cur->next;
     }
+
     return NULL;
 }
 
@@ -216,7 +225,6 @@ memory_block_t *extend(size_t size) {
 memory_block_t *split(memory_block_t *block, size_t size) {
     //? STUDENT TODO
     assert(!is_allocated(block));
-
     size_t original_size = get_size(block);
     size_t total_space = sizeof(memory_block_t) + original_size;
     size_t min_padded_size = get_min_padded_size(size, sizeof(memory_block_t));
@@ -227,6 +235,10 @@ memory_block_t *split(memory_block_t *block, size_t size) {
         return block;
     }
     memory_block_t * free = ((void*) block) + min_padded_size;
+
+    printf("SPLITTING ALLOCATION OUT CONTAINED -------- %p\n", block);
+    printf("SPLITTING FOR NEW FREE BLOCK AT ----------- %p\n", free);
+
     put_block(free, free_block_alloc, false);
     free->next = block->next;
     free->prev = block->prev;
@@ -246,9 +258,10 @@ memory_block_t *split(memory_block_t *block, size_t size) {
     set_exists_proceeding(block);
     set_exists_preceeding(free);
 
-    block->block_size_alloc = min_padded_size;
     block->next = free;
     allocate(block);
+    set_size(block, size);
+    printf("AHHH IM GONNA SPLIT RETURN 2\n");
     return free;
 }
 
@@ -272,6 +285,11 @@ int uinit() {
     free_head = csbrk(request);
     size_t payload_size = request - get_min_padded_size(0, sizeof(memory_block_t));
     put_block(free_head, payload_size, false);
+    set_no_preceeding(free_head);
+    set_no_proceeding(free_head);
+    printf("REQ %016lX\n", request);
+    printf("PTR %p\n", free_head);
+    printf("SIZE %016lX\n", get_size(free_head));
     return 0;
 }
 
@@ -281,6 +299,8 @@ int uinit() {
 void *umalloc(size_t size) {
     //* STUDENT TODO
     memory_block_t * block = find(size);
+    printf("BLOCK ALLOCATING AT -------- %p\n", block);
+    printf("ALLOCATION AMOUNT ---------- %016lX\n", get_size(block));
     if (block) {
         return get_payload(block);
     }
@@ -298,25 +318,46 @@ void *umalloc(size_t size) {
  */
 void ufree(void *ptr) {
     //* STUDENT TODO
+
     memory_block_t * new_free = get_block(ptr);
+    printf("FREEDOM AT ----------------------------- %p\n", new_free);
+    printf("FREED SIZE %016lX\n", get_size(new_free));
+
+
+    assert(is_allocated(new_free));
     deallocate(new_free);
     memory_block_t *cur = free_head;
 
+    if (!cur) {
+        printf("CASE -1\n");
+        free_head = new_free;
+        free_head->prev = NULL;
+        free_head->next = NULL;
+        return;
+    }
+
     if (cur > new_free) {
+        printf("CASE 0\n");
         free_head = new_free;
         cur->prev = new_free;
         free_head->next = cur;
         free_head->prev = NULL;
+        return;
     }
     while (cur < new_free && cur->next) cur = cur->next;
 
     if (cur >= new_free) {
+        printf("CASE 1\n");
         assert(cur != new_free);
         new_free->next = cur;
         new_free->prev = cur->prev;
+        if (cur->prev) {
+            cur->prev->next = new_free;
+        }
         cur->prev = new_free;
     }
     else { // !cur->next
+        printf("CASE 2\n");
         cur->next = new_free;
         new_free->prev = cur;
     }
