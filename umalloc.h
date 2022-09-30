@@ -1,19 +1,27 @@
 #include <stdlib.h>
 #include <stdbool.h>
+#include "csbrk.h"
 
 #define ALIGNMENT 16 /* The alignment of all payloads returned by umalloc */
 #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
+
+#define SPLIT_THRESHOLD 64 /* The amount of extra free space required to warrant splitting a free block */
 
 /*
  * memory_block_t - Represents a block of memory managed by the heap. The 
  * struct can be left as is, or modified for your design.
  * In the current design bit0 is the allocated bit
- * bits 1-3 are unused.
+ * bit1 is set whenever there is a contiguously adjacent preceeding block (does not specifiy if it is allocated or not)
+ * bit2 is set whenever there is a contiguously adjacent proceeding block (does not specifiy if it is allocated or not)
+ * bit3 is unused.
  * and the remaining 60 bit represent the size.
  */
 typedef struct memory_block_struct {
     size_t block_size_alloc;
+    //next block whether that be allocated or free
+    struct memory_block_struct *prev;
     struct memory_block_struct *next;
+    uint32_t PADDING; //explicitly add padding such that sizeof() returns 32 which % 16 is 0
 } memory_block_t;
 
 // Helper Functions, this may be editted if you change the signature in umalloc.c
@@ -29,6 +37,16 @@ typedef struct memory_block_struct {
         returns false if free
 */
 bool is_allocated(memory_block_t *block);
+
+/*
+    @Description: returns if a memory_block_t has a contiguously adjacent preceeding block
+*/
+bool has_preceeding(memory_block_t *block);
+/*
+    @Description: returns if a memory_block_t has a contiguously adjacent proceeding block
+*/
+bool has_proceeding(memory_block_t *block);
+
 /*
     @Description: set a memory block to the status of being allocated
         when a free block is to be put into use call this and pass said block
@@ -39,6 +57,26 @@ void allocate(memory_block_t *block);
         when an allocated block is to be taken out of use pass said block to this function
 */
 void deallocate(memory_block_t *block);
+
+
+/*
+    @Description: records within block_size_alloc that a given memory block has a contiguously adjacent preceeding block
+*/
+void set_exists_preceeding(memory_block_t *block);
+/*
+    @Description: records within block_size_alloc that a given memory block has no contiguously adjacent preceeding block
+*/
+void set_no_preceeding(memory_block_t *block);
+/*
+    @Description: records within block_size_alloc that a given memory block has a contiguously adjacent proceeding block
+*/
+void set_exists_proceeding(memory_block_t *block);
+/*
+    @Description: records within block_size_alloc that a given memory block has no contiguously adjacent proceeding block
+*/
+void set_no_proceeding(memory_block_t *block);
+
+
 /*
     @Description: return the size of the payload of a given memory_block_t struct
 */
@@ -47,6 +85,10 @@ size_t get_size(memory_block_t *block);
     @Description: find the proceeding block that is pointed to in the linked list by a given memory_block_t
 */
 memory_block_t *get_next(memory_block_t *block);
+/*
+    @Description: find the preceeding block that is pointed to in the linked list by a given memory_block_t
+*/
+memory_block_t *get_prev(memory_block_t *block);
 /*
     @Description: initialize a new memory_block_t at a given address,
         initialize it with (size, alloc) and set the next block pointer appropriately
@@ -63,15 +105,29 @@ void *get_payload(memory_block_t *block);
 */
 memory_block_t *get_block(void *payload);
 
+
+/*
+    @Description: get the minimum size of some payload + an object when padded
+*/
+size_t get_min_padded_size(size_t payload_size, size_t type_size);
+
+
 /*
     @Description: return a memory_block_t of sufficient size to satisfy a malloc request of a given size
 */
 memory_block_t *find(size_t size);
 /*
     @Description: In the event that more memory is needed to satisfy malloc requests
-        extend() may be called to increase the size of the heap
+        extend_pass_sbrk() may be called to increase the size of the heap
+*/
+memory_block_t *extend_pass_sbrk(sbrk_block * last_sbrk, size_t size);
+/*
+    @Description: In the event that more memory is needed to satisfy malloc requests
+        extend() may be called to increase the size of the heap,
+        this version finds last sbrk_block_t in list and calls extend_pass_sbrk()
 */
 memory_block_t *extend(size_t size);
+
 /*
     @Description: divide a free block into two sections, one allocated block, and the remaining space free
 */

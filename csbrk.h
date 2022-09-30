@@ -9,6 +9,9 @@
  * May not be used, modified, or copied without permission.
  **************************************************************************/
 
+#ifndef _CSBRK_H_
+#define _CSBRK_H_
+
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -19,7 +22,9 @@ typedef struct sbrk_block_struct
     uint64_t sbrk_start;
     uint64_t sbrk_end;
     struct sbrk_block_struct *next;
-} sbrk_block;
+} sbrk_block, sbrk_block_t;
 
 void *csbrk(intptr_t increment);
 int check_malloc_output(void *payload_start, size_t payload_length);
+
+#endif
