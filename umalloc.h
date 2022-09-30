@@ -1,6 +1,6 @@
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdbool.h>
-#include "csbrk.h"
 
 #define ALIGNMENT 16 /* The alignment of all payloads returned by umalloc */
 #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
@@ -116,11 +116,6 @@ size_t get_min_padded_size(size_t payload_size, size_t type_size);
     @Description: return a memory_block_t of sufficient size to satisfy a malloc request of a given size
 */
 memory_block_t *find(size_t size);
-/*
-    @Description: In the event that more memory is needed to satisfy malloc requests
-        extend_pass_sbrk() may be called to increase the size of the heap
-*/
-memory_block_t *extend_pass_sbrk(sbrk_block * last_sbrk, size_t size);
 /*
     @Description: In the event that more memory is needed to satisfy malloc requests
         extend() may be called to increase the size of the heap,
