@@ -21,7 +21,7 @@ typedef struct memory_block_struct {
     //next block whether that be allocated or free
     struct memory_block_struct *prev;
     struct memory_block_struct *next;
-    uint32_t PADDING; //explicitly add padding such that sizeof() returns 32 which % 16 is 0
+    struct memory_block_struct *prev_adjacent;
 } memory_block_t;
 
 // Helper Functions, this may be editted if you change the signature in umalloc.c
@@ -46,6 +46,16 @@ bool has_preceeding(memory_block_t *block);
     @Description: returns if a memory_block_t has a contiguously adjacent proceeding block
 */
 bool has_proceeding(memory_block_t *block);
+
+/*
+    @Description: returns the preceeding contiguously adjascent block to a given block
+*/
+memory_block_t *get_preceeding(memory_block_t *block);
+/*
+    @Description: returns the proceeding contiguously adjascent block to a given block
+*/
+memory_block_t *get_proceeding(memory_block_t *block);
+
 
 /*
     @Description: set a memory block to the status of being allocated
@@ -110,6 +120,11 @@ memory_block_t *get_block(void *payload);
     @Description: get the minimum size of some payload + an object when padded
 */
 size_t get_min_padded_size(size_t payload_size, size_t type_size);
+
+/*
+    @Description: get the entire size of a block, meaning both the size of the header and payload combined
+*/
+size_t get_entire_size(memory_block_t * block);
 
 
 /*

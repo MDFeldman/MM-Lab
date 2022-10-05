@@ -28,36 +28,49 @@ int check_heap() {
 
     //ensure prev of head is NULL
     if (cur && cur->prev) {
-//        printf("RET -5\n");
-        return -5;
+        return -1;
     }
 
     while (cur) {
+
         if (is_allocated(cur)) {
-//            printf("RET -1\n");
-            return -1;
+            return -2;
         }
         size_t pos = (size_t) cur;
 
         if (pos % ALIGNMENT != 0) {
-//            printf("RET -2\n");
-            return -2;
+            return -3;
         }
         if (cur->next) {
             size_t nextPos = (size_t) cur->next;
             size_t size = get_size(cur);
             if (pos + size + sizeof(memory_block_t) > nextPos) {
-//                printf("RET -3\n");
-                return -3;
+                return -4;
             }
             if (cur->next->prev != cur) {
-//                printf("RET -4\n");
-                return -4;
+                return -5;
+            }
+        }
+        if(has_preceeding(cur)) {
+            memory_block_t * preceeding = get_preceeding(cur);
+            if (!preceeding) {
+                return -6;
+            }
+            if (get_proceeding(preceeding) != cur) {
+                return -7;
+            }
+        }
+        if (has_proceeding(cur)) {
+            memory_block_t * proceeding = get_proceeding(cur);
+            if (!proceeding) {
+                return -8;
+            }
+            if (get_preceeding(proceeding) != cur) {
+                return -9;
             }
         }
         cur = cur->next;
     }
 
-//    printf("RET 0\n");
     return 0;
 }

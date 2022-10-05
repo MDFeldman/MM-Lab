@@ -33,7 +33,7 @@ typedef struct block_record {
 static FILE *read_args(int argc, char **argv);
 static void list_add(record_t **record_table, uint32_t id);
 static void list_remove(record_t **record_table, uint32_t id);
-static memory_block_t *initialize_list(void *heap, record_t **record_table, FILE *infile);
+static memory_block_t *initialize_list(void *heap, record_t **record_table, FILE *infile, size_t num_blocks);
 static void backup_list(record_t **dest, record_t **source, size_t len);
 static void run_tests(record_t **record_table, record_t **backup, size_t len, FILE *infile);
 
@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
     record_t **record_table = (record_t **)calloc(num_blocks, sizeof(record_t *));
     record_t **record_table_copy = (record_t **)calloc(num_blocks, sizeof(record_t *));
     heap = csbrk(heap_size);
-    free_head = initialize_list(heap, record_table, infile);
+    free_head = initialize_list(heap, record_table, infile, num_blocks);
 
     for (int i = 0; i < num_blocks; i++) {
         record_table_copy[i] = (record_t *)malloc(sizeof(record_t));
@@ -142,7 +142,7 @@ static void list_remove(record_t **record_table, uint32_t id) {
     if (block) block->next = record_table[id-1]->addr->next;
 }
 
-static memory_block_t *initialize_list(void *heap, record_t **record_table, FILE* infile) {
+static memory_block_t *initialize_list(void *heap, record_t **record_table, FILE* infile, size_t num_blocks) {
     memory_block_t *free_list = NULL;
     char op;
     uint32_t id;
@@ -179,7 +179,7 @@ static memory_block_t *initialize_list(void *heap, record_t **record_table, FILE
         else {
             block = record_table[id-1]->addr;
         }
-        
+
         switch (op) {
             case ALLOC:
                 list_remove(record_table, id);
@@ -191,6 +191,14 @@ static memory_block_t *initialize_list(void *heap, record_t **record_table, FILE
                 break;
             default:
                 break;
+        }
+
+        if (id > 1) {
+            set_exists_preceeding(block);
+            block->prev_adjacent = record_table[id-2]->addr;
+        }
+        if (id <= num_blocks) {
+            set_exists_proceeding(block);
         }
 
         if (fgets(linebuf, sizeof(linebuf), infile) == NULL) {

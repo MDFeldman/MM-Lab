@@ -32,6 +32,18 @@ bool has_proceeding(memory_block_t *block) {
     return (block->block_size_alloc>>2) & 0x1;
 }
 
+memory_block_t *get_preceeding(memory_block_t *block) {
+    return block->prev_adjacent;
+}
+
+memory_block_t *get_proceeding(memory_block_t *block) {
+    if (!has_proceeding(block)) {
+        return NULL;
+    }
+    void* ptr = get_payload(block) + get_size(block);
+    return (memory_block_t *) ptr;
+}
+
 /*
  * allocate - marks a block as allocated.
  */
@@ -110,6 +122,7 @@ void put_block(memory_block_t *block, size_t size, bool alloc) {
     block->block_size_alloc = size | alloc;
     block->prev = NULL;
     block->next = NULL;
+    block->prev_adjacent = NULL;
 }
 
 /*
@@ -131,11 +144,19 @@ memory_block_t *get_block(void *payload) {
 /*
  *  STUDENT TODO:
  *      Describe how you select which free block to allocate. What placement strategy are you using?
+ *
+ *
+ *      I allocate the first free block which fits the description
  */
 
 size_t get_min_padded_size(size_t payload_size, size_t type_size) {
     size_t sans_pad = payload_size + type_size;
     return sans_pad + ((ALIGNMENT - (sans_pad % ALIGNMENT)) % ALIGNMENT);
+}
+
+size_t get_entire_size(memory_block_t * block) {
+    assert(block);
+    return get_min_padded_size(get_size(block), sizeof(memory_block_t));
 }
 
 /*
@@ -144,7 +165,6 @@ size_t get_min_padded_size(size_t payload_size, size_t type_size) {
 memory_block_t *find(size_t size) {
     //? STUDENT TODO
     memory_block_t * cur = free_head;
-
     while (cur) {
         size_t min_padded_size = get_min_padded_size(size, 0);
         size_t payload_size = get_size(cur);
@@ -168,8 +188,12 @@ memory_block_t *find(size_t size) {
         }
         cur = cur->next;
     }
-
-    return NULL;
+    memory_block_t *ext = extend(size);
+    if (!ext) {
+        return NULL;
+    }
+    split(ext, size);
+    return ext;
 }
 
 /*
@@ -181,17 +205,28 @@ memory_block_t *extend(size_t size) {
     size_t request = size > DEFAULT_SIZE ? ((PAGESIZE - (size % PAGESIZE)) % PAGESIZE) + size + PAGESIZE : DEFAULT_SIZE;
     void * new_heap = csbrk(request);
     memory_block_t *new_free = new_heap;
+    size_t payload_size = request - get_min_padded_size(0, sizeof(memory_block_t));
 
-    put_block(new_free, request - get_min_padded_size(0, sizeof(memory_block_t)), false);
+    put_block(new_free, payload_size, false);
     set_no_preceeding(new_free);
     set_no_proceeding(new_free);
+    //new_free->prev_adjacent = NULL
 
     memory_block_t *cur = free_head;
+
+    if (!cur) {
+        free_head = new_free;
+        free_head->prev = NULL;
+        free_head->next = NULL;
+        return new_free;
+    }
+
     if (cur > new_free) {
         free_head = new_free;
         cur->prev = new_free;
         free_head->next = cur;
         free_head->prev = NULL;
+        return new_free;
     }
     while (cur < new_free && cur->next) cur = cur->next;
 
@@ -199,6 +234,9 @@ memory_block_t *extend(size_t size) {
         assert(cur != new_free);
         new_free->next = cur;
         new_free->prev = cur->prev;
+        if (cur->prev) {
+            cur->prev->next = new_free;
+        }
         cur->prev = new_free;
     }
     else { // !cur->next
@@ -226,22 +264,35 @@ memory_block_t *split(memory_block_t *block, size_t size) {
     //? STUDENT TODO
     assert(!is_allocated(block));
     size_t original_size = get_size(block);
-    size_t total_space = sizeof(memory_block_t) + original_size;
+    size_t total_space = get_entire_size(block);
     size_t min_padded_size = get_min_padded_size(size, sizeof(memory_block_t));
+    size_t min_padded_payload = min_padded_size - sizeof(memory_block_t);
     size_t free_block_alloc = total_space - min_padded_size - sizeof(memory_block_t);
 
     if (min_padded_size + sizeof(memory_block_t) + SPLIT_THRESHOLD >= original_size) {
         assert(total_space >= min_padded_size);
+        allocate(block);
+        if (block == free_head) {
+            free_head = block->next;
+        }
+        if (block->prev) {
+            block->prev->next = block->next;
+        }
+        if (block->next) {
+            block->next->prev = block->prev;
+        }
+
         return block;
     }
     memory_block_t * free = ((void*) block) + min_padded_size;
 
-//    printf("SPLITTING ALLOCATION OUT CONTAINED -------- %p\n", block);
-//    printf("SPLITTING FOR NEW FREE BLOCK AT ----------- %p\n", free);
-
     put_block(free, free_block_alloc, false);
     free->next = block->next;
     free->prev = block->prev;
+    free->prev_adjacent = block;
+    if (block == free_head) {
+        free_head = free;
+    }
     if (free->next) {
         free->next->prev = free;
     }
@@ -251,6 +302,7 @@ memory_block_t *split(memory_block_t *block, size_t size) {
 
     if (has_proceeding(block)) {
         set_exists_proceeding(free);
+        get_proceeding(free)->prev_adjacent = free;
     }
     else {
         set_no_proceeding(free);
@@ -260,7 +312,8 @@ memory_block_t *split(memory_block_t *block, size_t size) {
 
     block->next = free;
     allocate(block);
-    set_size(block, size);
+    set_size(block, min_padded_payload);
+
     return free;
 }
 
@@ -269,7 +322,52 @@ memory_block_t *split(memory_block_t *block, size_t size) {
  */
 memory_block_t *coalesce(memory_block_t *block) {
     //? STUDENT TODO
-    return NULL;
+    assert(block);
+    assert(!is_allocated(block));
+    bool write = false;
+    memory_block_t * write_to = block;
+    memory_block_t * last = block;
+    size_t new_size;
+
+    memory_block_t * preceeding = get_preceeding(block);
+    memory_block_t * proceeding = get_proceeding(block);
+
+    if (preceeding && !is_allocated(preceeding)) {
+        write = true;
+        write_to = preceeding;
+        new_size = get_entire_size(block) + get_size(preceeding);
+    }
+    else {
+        new_size = get_size(block);
+    }
+
+    if (proceeding && !is_allocated(proceeding)) {
+        write = true;
+        write_to = block;
+        new_size += get_entire_size(proceeding);
+        last = block;
+    }
+
+    if (!write) {
+        return block;
+    }
+
+    set_size(block, new_size);
+    // write_to->prev = write_to->prev
+    write_to->next = last->next;
+    // write_to->prev_adjacent = write_to->prev_adjacent
+    // set has_preceeding(write_to) to has_preceeding(write_to)
+    // set has_proceeding(write_to) to has_proceeding(last)
+    if (has_proceeding(last)) {
+        set_exists_proceeding(write_to);
+        memory_block_t *last_proceeding = get_proceeding(last);
+        assert(last_proceeding && has_preceeding(last_proceeding));
+        last_proceeding->prev_adjacent = write_to;
+    }
+    else {
+        set_no_proceeding(write_to);
+    }
+    return write_to;
 }
 
 

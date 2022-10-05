@@ -51,6 +51,8 @@ static int check_id(size_t *block, size_t block_size, size_t id) {
     size_t words = block_size/ sizeof(size_t);
     for(size_t i = 0; i < words; i++) {
         if (block[i] != id) {
+            printf("FOUND WORDS:i %ld,%ld:%ld\n", block_size, words, i);
+            printf("PTR %p\n", block + i);
             return -1;
         }
     }
@@ -68,6 +70,7 @@ static int check_correctness(trace_t *trace, size_t curr_op) {
         allocated_block_t *block = &trace->blocks[block_id];
         if (block->is_allocated) {
             if (check_id(block->payload, block->block_size, block->content_val) == -1) {
+                printf("RUNNER: BLOCK SIZE \t%016lX\t", block->block_size);
                 sprintf(msg, "umalloc corrupted block id %lu.", block_id);
                 malloc_error(curr_op, msg);
                 return -1;
