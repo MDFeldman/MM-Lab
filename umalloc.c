@@ -202,7 +202,7 @@ memory_block_t *find(size_t size) {
 memory_block_t *extend(size_t size) {
     //? STUDENT TODO
     size_t DEFAULT_SIZE = PAGESIZE * 4;
-    size_t request = size > DEFAULT_SIZE ? ((PAGESIZE - (size % PAGESIZE)) % PAGESIZE) + size + PAGESIZE : DEFAULT_SIZE;
+    size_t request = size > DEFAULT_SIZE - sizeof(memory_block_t) ? ((PAGESIZE - (size % PAGESIZE)) % PAGESIZE) + size + PAGESIZE : DEFAULT_SIZE;
     void * new_heap = csbrk(request);
     memory_block_t *new_free = new_heap;
     size_t payload_size = request - get_min_padded_size(0, sizeof(memory_block_t));
@@ -251,8 +251,8 @@ memory_block_t *extend(size_t size) {
 /*
  *  STUDENT TODO:
  *      Describe how you chose to split allocated blocks. Always? Sometimes? Never? Which end?
-
-    Allocated blocks will be split whenever the amount of excess space is above a threshold SPLIT_THRESHOLD
+ *
+ *  Allocated blocks will be split whenever the amount of excess space is above a threshold SPLIT_THRESHOLD
 */
 
 /*
