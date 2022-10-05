@@ -31,16 +31,25 @@ int check_heap() {
         return -1;
     }
 
+    /*
+        Loop through the list to ensure every free block has no issues
+    */
     while (cur) {
-
+        /*
+            Ensure every free block is unallocated and aligned
+        */
         if (is_allocated(cur)) {
             return -2;
         }
         size_t pos = (size_t) cur;
-
         if (pos % ALIGNMENT != 0) {
             return -3;
         }
+
+        /*
+            Ensure that cur->next points back to cur with ->prev and that there is no overlap between the blocks
+        */
+
         if (cur->next) {
             size_t nextPos = (size_t) cur->next;
             size_t size = get_size(cur);
@@ -51,6 +60,11 @@ int check_heap() {
                 return -5;
             }
         }
+
+        /*
+            Ensure that cur's adjacent contiguous blocks link back to cur
+        */
+
         if(has_preceeding(cur)) {
             memory_block_t * preceeding = get_preceeding(cur);
             if (!preceeding) {

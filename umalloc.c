@@ -33,6 +33,9 @@ bool has_proceeding(memory_block_t *block) {
 }
 
 memory_block_t *get_preceeding(memory_block_t *block) {
+    if (!has_preceeding(block)) {
+        return NULL;
+    }
     return block->prev_adjacent;
 }
 
@@ -159,6 +162,76 @@ size_t get_entire_size(memory_block_t * block) {
     return get_min_padded_size(get_size(block), sizeof(memory_block_t));
 }
 
+void check_adjacent(memory_block_t *block, bool st, bool print) {
+    memory_block_t * temp0 = block;
+    if (print) printf("SPLIT LISTING PROCEEDINGS\n");
+    bool A = true;
+    while (has_proceeding(temp0)) {
+        memory_block_t *next = get_proceeding(temp0);
+        if (print) printf("\tTEMP 0:next %p:%p:%d\n", temp0, next, is_allocated(temp0));
+        A &= (temp0 == get_preceeding(next));
+        if (print) printf("\t\t%p:%d\n", get_preceeding(next), has_preceeding(next));
+        temp0 = next;
+    }
+
+
+    temp0 = block;
+//    temp0 = has_preceeding(temp0) ? get_preceeding(temp0) : temp0;
+    if (print) printf("SPLIT LISTING PRECEEDINGS\n");
+    while(has_preceeding(temp0)) {
+        memory_block_t *next = get_preceeding(temp0);
+        if (print) printf("\tTEMP 0:next %p:%p:%d\n", temp0, next, is_allocated(temp0));
+        A &= (temp0 == get_proceeding(next));
+        if (print) printf("\t\t%p:%d\n", get_proceeding(next), has_proceeding(next));
+        temp0 = next;
+    }
+    assert(!st || A);
+}
+
+void check_all(bool st, bool print) {
+    memory_block_t * cur = free_head;
+    while(cur) {
+        check_adjacent(cur, st, print);
+        cur = cur->next;
+    }
+}
+
+void insert_free_block_no_context(memory_block_t *new_free) {
+    memory_block_t *cur = free_head;
+
+    if (!cur) {
+        free_head = new_free;
+        free_head->prev = NULL;
+        free_head->next = NULL;
+        return;
+    }
+
+    if (cur > new_free) {
+        free_head = new_free;
+        cur->prev = new_free;
+        free_head->next = cur;
+        free_head->prev = NULL;
+        return;
+    }
+    while (cur < new_free && cur->next) cur = cur->next;
+
+    if (cur >= new_free) {
+        assert(cur != new_free);
+        new_free->next = cur;
+        new_free->prev = cur->prev;
+        if (cur->prev) {
+            cur->prev->next = new_free;
+        }
+        cur->prev = new_free;
+    }
+    else { // !cur->next
+        cur->next = new_free;
+        new_free->prev = cur;
+    }
+    return;
+}
+
+
 /*
  * find - finds a free block that can satisfy the umalloc request.
  */
@@ -204,6 +277,7 @@ memory_block_t *extend(size_t size) {
     size_t DEFAULT_SIZE = PAGESIZE * 4;
     size_t request = size > DEFAULT_SIZE - sizeof(memory_block_t) ? ((PAGESIZE - (size % PAGESIZE)) % PAGESIZE) + size + PAGESIZE : DEFAULT_SIZE;
     void * new_heap = csbrk(request);
+
     memory_block_t *new_free = new_heap;
     size_t payload_size = request - get_min_padded_size(0, sizeof(memory_block_t));
 
@@ -212,37 +286,7 @@ memory_block_t *extend(size_t size) {
     set_no_proceeding(new_free);
     //new_free->prev_adjacent = NULL
 
-    memory_block_t *cur = free_head;
-
-    if (!cur) {
-        free_head = new_free;
-        free_head->prev = NULL;
-        free_head->next = NULL;
-        return new_free;
-    }
-
-    if (cur > new_free) {
-        free_head = new_free;
-        cur->prev = new_free;
-        free_head->next = cur;
-        free_head->prev = NULL;
-        return new_free;
-    }
-    while (cur < new_free && cur->next) cur = cur->next;
-
-    if (cur >= new_free) {
-        assert(cur != new_free);
-        new_free->next = cur;
-        new_free->prev = cur->prev;
-        if (cur->prev) {
-            cur->prev->next = new_free;
-        }
-        cur->prev = new_free;
-    }
-    else { // !cur->next
-        cur->next = new_free;
-        new_free->prev = cur;
-    }
+    insert_free_block_no_context(new_free);
 
     return new_free;
 }
@@ -324,7 +368,6 @@ memory_block_t *coalesce(memory_block_t *block) {
     //? STUDENT TODO
     assert(block);
     assert(!is_allocated(block));
-    bool write = false;
     memory_block_t * write_to = block;
     memory_block_t * last = block;
     size_t new_size;
@@ -333,7 +376,6 @@ memory_block_t *coalesce(memory_block_t *block) {
     memory_block_t * proceeding = get_proceeding(block);
 
     if (preceeding && !is_allocated(preceeding)) {
-        write = true;
         write_to = preceeding;
         new_size = get_entire_size(block) + get_size(preceeding);
     }
@@ -342,26 +384,52 @@ memory_block_t *coalesce(memory_block_t *block) {
     }
 
     if (proceeding && !is_allocated(proceeding)) {
-        write = true;
-        write_to = block;
         new_size += get_entire_size(proceeding);
-        last = block;
+        last = proceeding;
     }
 
-    if (!write) {
+    if (write_to == last) {
+        insert_free_block_no_context(block);
+
         return block;
     }
 
-    set_size(block, new_size);
-    // write_to->prev = write_to->prev
-    write_to->next = last->next;
+    if (!free_head) {
+        free_head = write_to;
+        free_head->next = NULL;
+        free_head->prev = NULL;
+        return write_to;
+    }
+
+    memory_block_t * lt_previously_free = write_to == block ? last : write_to;
+    memory_block_t * rt_previously_free = last == block ? write_to : last;
+    assert(lt_previously_free);
+    assert(rt_previously_free);
+
+    if (write_to < free_head) {
+        assert(free_head == last);
+        free_head = write_to;
+    }
+
+    set_size(write_to, new_size);
+    write_to->prev = lt_previously_free->prev;
+    if (write_to->prev) {
+        write_to->prev->next = write_to;
+    }
+    write_to->next = rt_previously_free->next;
+    if (write_to->next) {
+        write_to->next->prev = write_to;
+    }
+
     // write_to->prev_adjacent = write_to->prev_adjacent
     // set has_preceeding(write_to) to has_preceeding(write_to)
     // set has_proceeding(write_to) to has_proceeding(last)
     if (has_proceeding(last)) {
         set_exists_proceeding(write_to);
         memory_block_t *last_proceeding = get_proceeding(last);
-        assert(last_proceeding && has_preceeding(last_proceeding));
+        assert(is_allocated(last_proceeding));
+
+        assert(has_preceeding(last_proceeding));
         last_proceeding->prev_adjacent = write_to;
     }
     else {
@@ -415,36 +483,8 @@ void ufree(void *ptr) {
 
     assert(is_allocated(new_free));
     deallocate(new_free);
-    memory_block_t *cur = free_head;
 
-    if (!cur) {
-        free_head = new_free;
-        free_head->prev = NULL;
-        free_head->next = NULL;
-        return;
-    }
+    coalesce(new_free);
 
-    if (cur > new_free) {
-        free_head = new_free;
-        cur->prev = new_free;
-        free_head->next = cur;
-        free_head->prev = NULL;
-        return;
-    }
-    while (cur < new_free && cur->next) cur = cur->next;
-
-    if (cur >= new_free) {
-        assert(cur != new_free);
-        new_free->next = cur;
-        new_free->prev = cur->prev;
-        if (cur->prev) {
-            cur->prev->next = new_free;
-        }
-        cur->prev = new_free;
-    }
-    else { // !cur->next
-        cur->next = new_free;
-        new_free->prev = cur;
-    }
-
+//    insert_free_block_no_context(new_free);
 }

@@ -86,7 +86,6 @@ void set_exists_proceeding(memory_block_t *block);
 */
 void set_no_proceeding(memory_block_t *block);
 
-
 /*
     @Description: return the size of the payload of a given memory_block_t struct
 */
@@ -120,11 +119,14 @@ memory_block_t *get_block(void *payload);
     @Description: get the minimum size of some payload + an object when padded
 */
 size_t get_min_padded_size(size_t payload_size, size_t type_size);
-
 /*
     @Description: get the entire size of a block, meaning both the size of the header and payload combined
 */
 size_t get_entire_size(memory_block_t * block);
+/*
+    @Description: add a free block to the free list without any hints as to where it may fit
+*/
+void insert_free_block_no_context(memory_block_t *block);
 
 
 /*
