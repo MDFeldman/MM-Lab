@@ -127,7 +127,10 @@ size_t get_entire_size(memory_block_t * block);
     @Description: add a free block to the free list without any hints as to where it may fit
 */
 void insert_free_block_no_context(memory_block_t *block);
-
+/*
+    @Description: add a block into the free block list, provide a hint as to the previous free block
+*/
+void insert_free_block_hint(memory_block_t *new_free, memory_block_t *hint);
 
 /*
     @Description: return a memory_block_t of sufficient size to satisfy a malloc request of a given size
@@ -139,6 +142,14 @@ memory_block_t *find(size_t size);
         this version finds last sbrk_block_t in list and calls extend_pass_sbrk()
 */
 memory_block_t *extend(size_t size);
+
+/*
+    @Description: In the event that more memory is needed to satisfy malloc requests
+        extend_hint() may be called to increase the size of the heap,
+        this is another version of extend() that takes in a hint as to where the newly allocated memory will go in the free list
+        good for optimizaiton
+*/
+memory_block_t *extend_hint(size_t size, memory_block_t * hint);
 
 /*
     @Description: divide a free block into two sections, one allocated block, and the remaining space free

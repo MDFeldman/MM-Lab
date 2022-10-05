@@ -196,6 +196,10 @@ void check_all(bool st, bool print) {
     }
 }
 
+/*
+    @Description: add a block into the free block linked list, without using any hints
+        if needed this assignment may be optimised by adding another function to insert with a hint
+*/
 void insert_free_block_no_context(memory_block_t *new_free) {
     memory_block_t *cur = free_head;
 
@@ -231,6 +235,26 @@ void insert_free_block_no_context(memory_block_t *new_free) {
     return;
 }
 
+/*
+    @Description: add a block into the free block list, provide a hint as to the previous free block
+*/
+void insert_free_block_hint(memory_block_t *new_free, memory_block_t *hint) {
+    if (!hint || new_free < hint) {
+        return insert_free_block_no_context(new_free);
+    }    
+    if (new_free > hint && (!hint->next || new_free < hint->next)) {
+        new_free->prev = hint;
+        new_free->next = hint->next;
+        hint->next = new_free;
+        if (new_free->next) {
+            new_free->next->prev = new_free;
+        }
+    }
+    else {
+        return insert_free_block_no_context(new_free);
+    }
+}
+
 
 /*
  * find - finds a free block that can satisfy the umalloc request.
@@ -238,6 +262,7 @@ void insert_free_block_no_context(memory_block_t *new_free) {
 memory_block_t *find(size_t size) {
     //? STUDENT TODO
     memory_block_t * cur = free_head;
+    memory_block_t * prev = NULL;
     while (cur) {
         size_t min_padded_size = get_min_padded_size(size, 0);
         size_t payload_size = get_size(cur);
@@ -259,9 +284,10 @@ memory_block_t *find(size_t size) {
             }
             return cur;
         }
+        prev = cur;
         cur = cur->next;
     }
-    memory_block_t *ext = extend(size);
+    memory_block_t *ext = extend_hint(size, prev);
     if (!ext) {
         return NULL;
     }
@@ -287,6 +313,28 @@ memory_block_t *extend(size_t size) {
     //new_free->prev_adjacent = NULL
 
     insert_free_block_no_context(new_free);
+
+    return new_free;
+}
+
+/*
+ * extend - extends the heap if more memory is required.
+ */
+memory_block_t *extend_hint(size_t size, memory_block_t * hint) {
+    //? STUDENT TODO
+    size_t DEFAULT_SIZE = PAGESIZE * 4;
+    size_t request = size > DEFAULT_SIZE - sizeof(memory_block_t) ? ((PAGESIZE - (size % PAGESIZE)) % PAGESIZE) + size + PAGESIZE : DEFAULT_SIZE;
+    void * new_heap = csbrk(request);
+
+    memory_block_t *new_free = new_heap;
+    size_t payload_size = request - get_min_padded_size(0, sizeof(memory_block_t));
+
+    put_block(new_free, payload_size, false);
+    set_no_preceeding(new_free);
+    set_no_proceeding(new_free);
+    //new_free->prev_adjacent = NULL
+
+    insert_free_block_hint(new_free, hint);
 
     return new_free;
 }
